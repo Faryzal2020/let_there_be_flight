@@ -48,12 +48,18 @@ public class FlightModeAutomatic extends FlightModeStandard {
   protected let hovering: Float;
   protected let referenceZ: Float;
   protected let gravityTrim: Float;
+  protected let isBrakingVertical: Bool;
+  protected let brakeDirection: Float;
+  protected let brakeTimer: Float;
 
   public static func Create(component: ref<FlightComponent>) -> ref<FlightModeAutomatic> {
     let self = new FlightModeAutomatic();
     self.Initialize(component);
     self.hovering = 1.0;
     self.gravityTrim = 0.0;
+    self.isBrakingVertical = false;
+    self.brakeDirection = 0.0;
+    self.brakeTimer = 0.0;
     return self;
   }
 
@@ -66,12 +72,18 @@ public class FlightModeAutomatic extends FlightModeStandard {
     let normal: Vector4;
     this.referenceZ = this.component.stats.d_position.Z;
     this.gravityTrim = 0.0;
+    this.isBrakingVertical = false;
+    this.brakeDirection = 0.0;
+    this.brakeTimer = 0.0;
     this.component.FindGround(normal);
     this.component.hoverHeight = MaxF(this.component.distance, FlightSettings.GetFloat("hoverModeMinHoverHeight"));
   }
 
   public func Deactivate() {
     this.gravityTrim = 0.0;
+    this.isBrakingVertical = false;
+    this.brakeDirection = 0.0;
+    this.brakeTimer = 0.0;
   }
 
   public func GetDescription() -> String = "Automatic";
@@ -103,12 +115,42 @@ public class FlightModeAutomatic extends FlightModeStandard {
     let airCorrection = 0.0;
 
     if isLiftActive || this.hovering > 0.0 {
+      this.isBrakingVertical = false;
+      this.brakeTimer = 0.0;
       this.referenceZ = this.component.stats.d_position.Z;
       airCorrection = this.component.lift;
+      if this.component.lift > 0.05 {
+        this.brakeDirection = 1.0;
+      } else if this.component.lift < -0.05 {
+        this.brakeDirection = -1.0;
+      } else {
+        this.brakeDirection = 0.0;
+      }
     } else {
-      let zDiff = this.referenceZ - this.component.stats.d_position.Z;
-      this.gravityTrim = ClampF(this.gravityTrim + (vz - zDiff * 0.5) * timeDelta * 0.8, -6.0, 6.0);
-      airCorrection = ClampF(zDiff * 0.2 - vz * 0.05, -0.5, 0.5);
+      if this.brakeDirection != 0.0 {
+        this.isBrakingVertical = true;
+      }
+
+      if this.isBrakingVertical {
+        this.brakeTimer += timeDelta;
+        let stoppedAscent: Bool = this.brakeDirection > 0.0 && vz <= 0.05;
+        let stoppedDescent: Bool = this.brakeDirection < 0.0 && vz >= -0.05;
+        if stoppedAscent || stoppedDescent || AbsF(vz) <= 0.05 || this.brakeTimer > 2.0 {
+          this.isBrakingVertical = false;
+          this.brakeDirection = 0.0;
+          this.brakeTimer = 0.0;
+          this.referenceZ = this.component.stats.d_position.Z;
+          airCorrection = 0.0;
+        } else {
+          airCorrection = -ClampF(vz * 0.12, -0.6, 0.6);
+        }
+      }
+
+      if !this.isBrakingVertical {
+        let zDiff = this.referenceZ - this.component.stats.d_position.Z;
+        this.gravityTrim = ClampF(this.gravityTrim + (vz - zDiff * 0.2) * timeDelta * 0.4, -4.0, 4.0);
+        airCorrection = ClampF(zDiff * 0.15 - vz * 0.1, -0.4, 0.4);
+      }
     }
 
     let liftFactor = LerpF(this.hovering, airCorrection, hoverCorrection);
