@@ -47,11 +47,13 @@ public class FlightModeAutomatic extends FlightModeStandard {
 
   protected let hovering: Float;
   protected let referenceZ: Float;
+  protected let gravityTrim: Float;
 
   public static func Create(component: ref<FlightComponent>) -> ref<FlightModeAutomatic> {
     let self = new FlightModeAutomatic();
     self.Initialize(component);
     self.hovering = 1.0;
+    self.gravityTrim = 0.0;
     return self;
   }
 
@@ -63,11 +65,14 @@ public class FlightModeAutomatic extends FlightModeStandard {
   public func Activate() -> Void {
     let normal: Vector4;
     this.referenceZ = this.component.stats.d_position.Z;
+    this.gravityTrim = 0.0;
     this.component.FindGround(normal);
     this.component.hoverHeight = MaxF(this.component.distance, FlightSettings.GetFloat("hoverModeMinHoverHeight"));
   }
 
-  public func Deactivate() {}
+  public func Deactivate() {
+    this.gravityTrim = 0.0;
+  }
 
   public func GetDescription() -> String = "Automatic";
 
@@ -81,6 +86,8 @@ public class FlightModeAutomatic extends FlightModeStandard {
       this.hovering = 0.0;
     }
 
+    let isLiftActive = AbsF(this.component.lift) > 0.05;
+
     if lastHovering == 0.0 && this.hovering > 0.0 {
       this.component.hoverHeight = MaxF(this.component.distance + this.component.lift * timeDelta * this.automaticModeLiftFactor, FlightSettings.GetFloat("hoverModeMinHoverHeight"));
     } else {
@@ -91,9 +98,23 @@ public class FlightModeAutomatic extends FlightModeStandard {
     let idealNormal = Vector4.Interpolate(FlightUtils.Up(), normal, this.hovering);
 
     let hoverCorrection = this.component.hoverGroundPID.GetCorrectionClamped(heightDifference, timeDelta, FlightSettings.GetFloat("hoverClamp"));// / FlightSettings.GetFloat("hoverClamp");
-    let liftFactor = LerpF(this.hovering, this.component.lift - this.component.stats.d_velocity.Z * 0.1, hoverCorrection);
 
-    this.UpdateWithNormalLift(timeDelta, idealNormal, liftFactor * this.automaticModeHoverFactor + (9.81000042) * this.gravityFactor);
+    let vz = this.component.stats.d_velocity.Z;
+    let airCorrection = 0.0;
+
+    if isLiftActive || this.hovering > 0.0 {
+      this.referenceZ = this.component.stats.d_position.Z;
+      airCorrection = this.component.lift;
+    } else {
+      let zDiff = this.referenceZ - this.component.stats.d_position.Z;
+      this.gravityTrim = ClampF(this.gravityTrim + (vz - zDiff * 0.5) * timeDelta * 0.8, -6.0, 6.0);
+      airCorrection = ClampF(zDiff * 0.2 - vz * 0.05, -0.5, 0.5);
+    }
+
+    let liftFactor = LerpF(this.hovering, airCorrection, hoverCorrection);
+    let effectiveGravity = (9.81000042 * this.gravityFactor) - (this.gravityTrim * (1.0 - this.hovering));
+
+    this.UpdateWithNormalLift(timeDelta, idealNormal, liftFactor * this.automaticModeHoverFactor + effectiveGravity);
 
     let aeroFactor = Vector4.Dot(this.component.stats.d_forward, this.component.stats.d_direction);
     let yawDirectionality: Float = this.component.stats.d_speedRatio * this.automaticModeYawDirectionality;
