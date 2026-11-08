@@ -18,6 +18,33 @@ public abstract class FlightModeStandard extends FlightMode {
 
   @runtimeProperty("ModSettings.mod", "Let There Be Flight")
   @runtimeProperty("ModSettings.category", "UI-Settings-Standard-Mode")
+  @runtimeProperty("ModSettings.displayName", "UI-Settings-Yaw-Limit")
+  @runtimeProperty("ModSettings.description", "UI-Settings-Yaw-Limit-Description")
+  @runtimeProperty("ModSettings.step", "0.1")
+  @runtimeProperty("ModSettings.min", "0.5")
+  @runtimeProperty("ModSettings.max", "10.0")
+  public let standardModeYawLimit: Float = 2.0;
+
+  @runtimeProperty("ModSettings.mod", "Let There Be Flight")
+  @runtimeProperty("ModSettings.category", "UI-Settings-Standard-Mode")
+  @runtimeProperty("ModSettings.displayName", "UI-Settings-Yaw-Torque-Decay")
+  @runtimeProperty("ModSettings.description", "UI-Settings-Yaw-Torque-Decay-Description")
+  @runtimeProperty("ModSettings.step", "0.1")
+  @runtimeProperty("ModSettings.min", "0.0")
+  @runtimeProperty("ModSettings.max", "2.0")
+  public let standardModeYawTorqueDecay: Float = 1.0;
+
+  @runtimeProperty("ModSettings.mod", "Let There Be Flight")
+  @runtimeProperty("ModSettings.category", "UI-Settings-Standard-Mode")
+  @runtimeProperty("ModSettings.displayName", "UI-Settings-Yaw-Mass-Resistance")
+  @runtimeProperty("ModSettings.description", "UI-Settings-Yaw-Mass-Resistance-Description")
+  @runtimeProperty("ModSettings.step", "0.1")
+  @runtimeProperty("ModSettings.min", "0.0")
+  @runtimeProperty("ModSettings.max", "2.0")
+  public let standardModeYawMassResistance: Float = 1.0;
+
+  @runtimeProperty("ModSettings.mod", "Let There Be Flight")
+  @runtimeProperty("ModSettings.category", "UI-Settings-Standard-Mode")
   @runtimeProperty("ModSettings.displayName", "UI-Settings-Sway-Factor")
   @runtimeProperty("ModSettings.step", "1.0")
   @runtimeProperty("ModSettings.min", "0.0")
@@ -161,8 +188,34 @@ public abstract class FlightModeStandard extends FlightMode {
     this.torque.X = -(pitchCorrection * (1.0 - this.component.angularBrake));
     // roll correction
     this.torque.Y = (rollCorrection * (1.0 - this.component.angularBrake));
-    // yaw correction
-    this.torque.Z = -((this.component.yaw - (rollDegOffInput * pitchDegOffInput / 1800.0)) * this.standardModeYawFactor);
+    // yaw correction with torque decay and mass inertia resistance
+    let yawInput: Float = this.component.yaw - (rollDegOffInput * pitchDegOffInput / 1800.0);
+    let baseYawTorque: Float = -(yawInput * this.standardModeYawFactor);
+
+    if AbsF(yawInput) > 0.001 {
+      // Vehicle mass resists yaw acceleration: heavier vehicles accelerate slower into the turn
+      let vehicleMass: Float = MaxF(this.component.stats.s_mass, 100.0);
+      let massResistanceFactor: Float = ClampF(1500.0 / vehicleMass, 0.2, 3.0);
+      let massScaling: Float = LerpF(this.standardModeYawMassResistance, 1.0, massResistanceFactor);
+      baseYawTorque *= massScaling;
+
+      // Torque decay: decays torque the closer yaw velocity is to the limit, avoiding runaway spinning
+      if this.standardModeYawTorqueDecay > 0.0 {
+        let currentYawRate: Float = this.component.stats.d_angularVelocity.Z;
+        // In this coordinate frame, baseYawTorque and d_angularVelocity.Z share the same sign
+        // when accelerating into the turn (product > 0)
+        let isAcceleratingTurn: Bool = (baseYawTorque * currentYawRate) > 0.0;
+        if isAcceleratingTurn {
+          let targetYawLimit: Float = MaxF(this.standardModeYawLimit * AbsF(yawInput), 0.05);
+          let speedRatio: Float = AbsF(currentYawRate) / targetYawLimit;
+          // As speed reaches the limit, torque decays to 0; if overshooting, provides gentle counter-torque
+          let decay: Float = ClampF(1.0 - (speedRatio * this.standardModeYawTorqueDecay), -0.5, 1.0);
+          baseYawTorque *= decay;
+        }
+      }
+    }
+
+    this.torque.Z = baseYawTorque;
     // rotational brake
     // torque = torque + (angularDamp);
 

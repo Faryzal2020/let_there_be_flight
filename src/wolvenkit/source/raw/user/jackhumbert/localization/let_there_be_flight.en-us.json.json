@@ -205,6 +205,36 @@
             },
             {
               "$type": "localizationPersistenceOnScreenEntry",
+              "secondaryKey": "UI-Settings-Yaw-Limit",
+              "femaleVariant": "Yaw Speed Limit"
+            },
+            {
+              "$type": "localizationPersistenceOnScreenEntry",
+              "secondaryKey": "UI-Settings-Yaw-Limit-Description",
+              "femaleVariant": "Maximum yaw turning speed in radians per second when steering. Prevents continuous spinning."
+            },
+            {
+              "$type": "localizationPersistenceOnScreenEntry",
+              "secondaryKey": "UI-Settings-Yaw-Torque-Decay",
+              "femaleVariant": "Yaw Torque Decay"
+            },
+            {
+              "$type": "localizationPersistenceOnScreenEntry",
+              "secondaryKey": "UI-Settings-Yaw-Torque-Decay-Description",
+              "femaleVariant": "How strongly yaw torque decays as angular velocity approaches the yaw limit. Higher values decay torque earlier; 0 disables decay."
+            },
+            {
+              "$type": "localizationPersistenceOnScreenEntry",
+              "secondaryKey": "UI-Settings-Yaw-Mass-Resistance",
+              "femaleVariant": "Yaw Mass Resistance"
+            },
+            {
+              "$type": "localizationPersistenceOnScreenEntry",
+              "secondaryKey": "UI-Settings-Yaw-Mass-Resistance-Description",
+              "femaleVariant": "How much vehicle mass resists yaw acceleration. Heavier vehicles take longer to turn; 0 gives uniform acceleration."
+            },
+            {
+              "$type": "localizationPersistenceOnScreenEntry",
               "secondaryKey": "UI-Settings-Sway-Factor",
               "femaleVariant": "Sway Factor"
             },
