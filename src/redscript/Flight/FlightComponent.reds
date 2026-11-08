@@ -59,6 +59,7 @@ public native class FlightComponent extends GameComponent {
   public let m_vehicleTPPCallbackID: ref<CallbackHandle>;
 
   public let isPlayerMounted: Bool;
+  public let isDetaching: Bool;
 
   let hoverGroundPID: ref<PID>;
   // let hoverPID: ref<PID>;
@@ -297,8 +298,10 @@ public native class FlightComponent extends GameComponent {
     // vehicleFlight.stateMachineIdentifier.definitionName = n"VehicleFlight";
     // GameInstance.GetPlayerSystem(this.GetVehicle().GetGame()).GetLocalPlayerControlledGameObject().QueueEvent(vehicleFlight);
 
+    this.isDetaching = true;
     this.isDestroyed = true;
     this.hasExploded = true;
+    this.StopDestroyedAlarm();
     if this.active {
       this.Deactivate(true);
     }
@@ -840,18 +843,18 @@ public native class FlightComponent extends GameComponent {
       thruster.Stop();
     }
 
-    if !silent {
+    if !silent && !this.isDetaching {
       this.GetVehicle().TurnEngineOn(true);
     }
 
-    if !FlightSettings.GetInstance().generalApplyFlightPhysicsWhenDeactivated {
+    if !this.isDetaching && !FlightSettings.GetInstance().generalApplyFlightPhysicsWhenDeactivated {
       let evt = new FlightFxCleanedUpEvent();
       GameInstance.GetDelaySystem(this.GetVehicle().GetGame()).DelayEvent(this.GetVehicle(), evt, evt.delay);
     }
 
     if this.isPlayerMounted {
       this.sys.ctlr.Deactivate(silent);
-      if !silent {
+      if !silent && !this.isDetaching {
         FlightAudio.Get().Play("vehicle3_off");
       }
       // this.sys.audio.Stop("playerVehicle");
@@ -862,7 +865,9 @@ public native class FlightComponent extends GameComponent {
     }
     // this.sys.audio.Stop("vehicle" + this.GetUniqueID());
 
-    this.configuration.OnDeactivationCore();
+    if !this.isDetaching {
+      this.configuration.OnDeactivationCore();
+    }
   }
 
   protected cb func OnGridDestruction(evt: ref<VehicleGridDestructionEvent>) -> Bool {

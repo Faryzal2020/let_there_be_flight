@@ -285,11 +285,23 @@ void IFlightConfiguration::RemoveColliders() {
 
   if (!flightComponent || !flightComponent->entity) {
     LTBF_WARN_ONCE("[FlightConfiguration] RemoveColliders: flight component or its entity is gone");
+    this->attachedShapeCount = 0;
+    this->originalShapeCount = -1;
     return;
   }
 
-  if (!flightComponent->entity->IsOfClass(rtti->GetClass("vehicleBaseObject")))
+  if (flightComponent->isDetaching) {
+    LTBF_WARN_ONCE("[FlightConfiguration] RemoveColliders: entity is detaching, skipping shape detach");
+    this->attachedShapeCount = 0;
+    this->originalShapeCount = -1;
     return;
+  }
+
+  if (!flightComponent->entity->IsOfClass(rtti->GetClass("vehicleBaseObject"))) {
+    this->attachedShapeCount = 0;
+    this->originalShapeCount = -1;
+    return;
+  }
 
   auto chassis = EntityExt::From(flightComponent->entity)->FindComponent<vehicle::ChassisComponent>();
 
@@ -299,9 +311,18 @@ void IFlightConfiguration::RemoveColliders() {
     auto key = (physics::PhysicalSystemProxy *) physics::ProxyID::GetProxy(chassis->proxyID);
     if (!key || !Utils::LooksLikeDynArray(key->bodies) || key->bodies.size == 0 || !key->bodies.entries[0]) {
       LTBF_WARN_ONCE("[FlightConfiguration] RemoveColliders: chassis physics proxy has no body");
+      this->attachedShapeCount = 0;
+      this->originalShapeCount = -1;
       return;
     }
     auto body = (physx::PxRigidDynamic *) key->bodies.entries[0];
+
+    if (!body->getScene()) {
+      LTBF_WARN_ONCE("[FlightConfiguration] RemoveColliders: chassis body has no scene, skipping shape detach");
+      this->attachedShapeCount = 0;
+      this->originalShapeCount = -1;
+      return;
+    }
 
     // remove indexes from bottom mask
 //    for (int i = this->originalShapeCount; i < nbShapes; i++) {
@@ -317,11 +338,10 @@ void IFlightConfiguration::RemoveColliders() {
     physx::PxShape *shapes[shapeQueryBufferSize];
     auto nbShapes = body->getShapes(shapes, shapeQueryBufferSize, 0);
     for (uint32_t i = 0; i < nbShapes; i++) {
-      // this might cause a crash when the game exits with:
-      // * vehicle flight active?
-      // * more than one vehicle flight active?
       if (this->IsTrackedShape(shapes[i])) {
-        body->detachShape(*shapes[i], true);
+        if (shapes[i]->getActor() == body) {
+          body->detachShape(*shapes[i], false);
+        }
       }
     }
 

@@ -18,6 +18,7 @@ void FlightComponent::OnAttach(void* a1) {
 }
 
 void FlightComponent::OnDetach(void* a1) {
+  this->isDetaching = true;
   this->sys->UnregisterComponent(Handle<FlightComponent>(this));
   game::Component::OnDetach(a1);
 }
